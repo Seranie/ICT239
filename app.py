@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request
 from ICT239_qns2b import app, db
-# from models.Tour import Tour
+from models.Tour import Tour
 
 
 @app.template_filter('formatdate')
@@ -14,8 +14,7 @@ def index():
 
 @app.route('/tours')
 def tours():
-    Tour.createTours()
-    return render_template('tours.html', tours=Tour.tours)
+    return render_template('tours.html', tours=Tour.getAllTours())
 
 if __name__ == '__main__':
     app.run(debug=True)

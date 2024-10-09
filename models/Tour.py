@@ -1,5 +1,5 @@
 from datetime import datetime
-from app import app
+from ICT239_qns2b import app, db
 from models.Schedule import Schedule
 
 all_Tours = [{"code": "VE001", "country": "Vietnam", "name": "Sapa Halong Hanoi", "cost": 650,
@@ -45,45 +45,52 @@ all_Tours = [{"code": "VE001", "country": "Vietnam", "name": "Sapa Halong Hanoi"
                   "schedule": [{"departureDate": datetime(2024, 9, 18), "capacity": 8},
                                {"departureDate": datetime(2024, 10, 19), "capacity": 10}]}]
 
-class Tour:
-    tours = {}
+class Tour(db.Document):
+    meta = {'collection':'tours'}
 
-    def __init__(self, code, name, country, cost, description, days, nights, url, schedule):
-        self.code = code
-        self.name = name
-        self.country = country
-        self.cost = cost
-        self.description = description
-        self.days = days
-        self.nights = nights
-        self.url = url
-        self.schedule = []
-        for data in schedule:
-            self.schedule.append(Schedule(data['departureDate'], data['capacity']))
+    code = db.StringField(unique=True, required=True)
+    name = db.StringField(required=True)
+    country = db.StringField()
+    cost = db.FloatField(required=True)
+    description = db.StringField()
+    days = db.IntField(required=True) # int because might need to do calculation with it such as cost * duration later on
+    nights = db.IntField(required=True)
+    url = db.StringField()
+    schedule = db.ListField(db.ReferenceField(Schedule)) #List of Schedule document references
 
-    @classmethod
-    def createTours(cls):
-        for data in all_Tours:
-            cls.tours[data['code']] = Tour(data['code'], data['name'], data['country'], data['cost'],
-                                           data['description'], data['days'], data['nights'], data['url'],
-                                           data['schedule'])
-
-    @classmethod
-    def getAllToursBy(cls, country = None, lower = None, upper= None):
-        if not cls.tours:
-            cls.createTours()
-            lower = 0 if not lower else int(lower)
-            upper = 500000 if not upper else int(upper)
-        if not country or country.upper() == 'ALL':
-            tours = [t for t in cls.tours.values() if lower <= t.cost <= upper]
+    @staticmethod
+    def getTour(code):
+        tour = Tour.objects(code=code).first()
+        if tour is None: #Tour document does not exist in collection yet
+            for tourData in all_Tours: #Find the tour that matches this tour
+                if tourData['code'] == code:
+                    scheduleList = []
+                    for scheduleData in tourData['schedule']: # iterates through schedules
+                        newSchedule = Schedule.createSchedule(scheduleData['departureDate'], scheduleData['capacity'])
+                        scheduleList.append(newSchedule)
+                    newTour = Tour.createTour(
+                        code=tourData['code'],
+                        name=tourData['name'],
+                        country=tourData['country'],
+                        cost=tourData['cost'],
+                        description=tourData['description'],
+                        days=tourData['days'],
+                        nights=tourData['nights'],
+                        url=tourData['url'],
+                        schedule=scheduleList)
+                    return newTour
+            return None
         else:
-            tours = [t for t in cls.tours.values() if lower <= t.cost <= upper and t.country.lower() == country.lower()]
-            countries = sorted(list(set([t.country for t in cls.tours.values()])))
-        return tours, countries
+            return tour
 
-    @classmethod
-    def getTour(cls, code):
-        if not cls.tours:
-            cls.createTours()
-        return cls.tours.get(code)
+    @staticmethod
+    def getAllTours():
+        tours = []
+        for tour in all_Tours: #iterate through all_Tours
+            getTour = Tour.getTour(tour['code']) #gets the tour if already exists, else creates a new one
+            tours.append(getTour)
+        return tours
 
+    @staticmethod
+    def createTour(code, name, country, cost, description, days, nights, url, scheduleList = []):
+        return Tour(code=code, name=name, country=country, cost=cost, description=description, days=days, nights=nights, url=url, schedule=scheduleList).save()
